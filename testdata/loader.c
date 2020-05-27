@@ -60,11 +60,16 @@ int __attribute__((noinline)) global_fn(uint32_t arg) {
 	return static_fn(arg) + global_fn2(arg) + global_fn3(arg);
 }
 
+struct __attribute__((packed)) arg {
+	uint32_t a, b;
+};
+
 #if __clang_major__ >= 9
 static volatile unsigned int key1 = 0; // .bss
 static volatile unsigned int key2 = 1; // .data
-static volatile const unsigned int key3 = 2; // .rodata
-static volatile const uint32_t arg; // .rodata, rewritten by loader
+static volatile const unsigned int key3 = 2; // .rodata, rewritten by loader
+static volatile const uint32_t arg1; // .rodata, rewritten by loader
+static volatile const struct arg arg2; // .rodata, rewritten by loader
 #endif
 
 __section("xdp") int xdp_prog() {
@@ -72,12 +77,13 @@ __section("xdp") int xdp_prog() {
 	unsigned int key1 = 0;
 	unsigned int key2 = 1;
 	unsigned int key3 = 2;
-	uint32_t arg = 1;
+	uint32_t arg1 = 1;
+	struct arg arg2 = { 1, 2 };
 #endif
 	map_lookup_elem(&hash_map, (void*)&key1);
 	map_lookup_elem(&hash_map2, (void*)&key2);
 	map_lookup_elem(&hash_map2, (void*)&key3);
-	return static_fn(arg) + global_fn(arg);
+	return static_fn(arg1) + global_fn(arg1) * arg2.a + arg2.b;
 }
 
 // This function has no relocations, and is thus parsed differently.

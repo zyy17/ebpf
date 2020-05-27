@@ -63,7 +63,8 @@ func TestLoadCollectionSpec(t *testing.T) {
 
 		if rodata := spec.Maps[".rodata"]; rodata != nil {
 			err := spec.RewriteConstants(map[string]interface{}{
-				"arg": uint32(1),
+				"arg1": uint32(1),
+				"arg2": struct{ a, b uint32 }{1, 2},
 			})
 			if err != nil {
 				t.Fatal("Can't rewrite constant:", err)
@@ -99,8 +100,8 @@ func TestLoadCollectionSpec(t *testing.T) {
 			t.Fatal("Can't run program:", err)
 		}
 
-		if ret != 5 {
-			t.Error("Expected return value to be 5, got", ret)
+		if ret != 7 {
+			t.Error("Expected return value to be 7, got", ret)
 		}
 	})
 }
