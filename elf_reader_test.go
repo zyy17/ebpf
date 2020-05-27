@@ -65,6 +65,7 @@ func TestLoadCollectionSpec(t *testing.T) {
 			err := spec.RewriteConstants(map[string]interface{}{
 				"arg1": uint32(1),
 				"arg2": struct{ a, b uint32 }{1, 2},
+				"addr": struct{ addr8 [16]byte }{[16]byte{255}},
 			})
 			if err != nil {
 				t.Fatal("Can't rewrite constant:", err)

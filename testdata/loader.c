@@ -64,12 +64,20 @@ struct __attribute__((packed)) arg {
 	uint32_t a, b;
 };
 
+struct addr {
+	union {
+		uint8_t u6_addr8[16];
+		uint32_t u6_addr32[4];
+	};
+};
+
 #if __clang_major__ >= 9
 static volatile unsigned int key1 = 0; // .bss
 static volatile unsigned int key2 = 1; // .data
 static volatile const unsigned int key3 = 2; // .rodata, rewritten by loader
 static volatile const uint32_t arg1; // .rodata, rewritten by loader
 static volatile const struct arg arg2; // .rodata, rewritten by loader
+static volatile const struct addr __attribute__((aligned(16))) addr; // .rodata, rewritten by loader
 #endif
 
 __section("xdp") int xdp_prog() {
@@ -79,10 +87,14 @@ __section("xdp") int xdp_prog() {
 	unsigned int key3 = 2;
 	uint32_t arg1 = 1;
 	struct arg arg2 = { 1, 2 };
+	struct addr addr = { .u6_addr8 = {255} };
 #endif
 	map_lookup_elem(&hash_map, (void*)&key1);
 	map_lookup_elem(&hash_map2, (void*)&key2);
 	map_lookup_elem(&hash_map2, (void*)&key3);
+	if (addr.u6_addr8[0] == 0) {
+		return 42;
+	}
 	return static_fn(arg1) + global_fn(arg1) * arg2.a + arg2.b;
 }
 
