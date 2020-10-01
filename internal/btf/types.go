@@ -25,7 +25,7 @@ type Type interface {
 
 	// Enumerate all nested Types. Repeated calls must visit nested
 	// types in the same order.
-	walk(*copyStack)
+	walk(*typeDeque)
 }
 
 // Name identifies a type.
@@ -43,7 +43,7 @@ type Void struct{}
 func (v *Void) ID() TypeID      { return 0 }
 func (v *Void) size() uint32    { return 0 }
 func (v *Void) copy() Type      { return (*Void)(nil) }
-func (v *Void) walk(*copyStack) {}
+func (v *Void) walk(*typeDeque) {}
 
 type IntEncoding byte
 
@@ -68,7 +68,7 @@ type Int struct {
 }
 
 func (i *Int) size() uint32    { return i.Size }
-func (i *Int) walk(*copyStack) {}
+func (i *Int) walk(*typeDeque) {}
 func (i *Int) copy() Type {
 	cpy := *i
 	return &cpy
@@ -81,7 +81,7 @@ type Pointer struct {
 }
 
 func (p *Pointer) size() uint32       { return 8 }
-func (p *Pointer) walk(cs *copyStack) { cs.push(&p.Target) }
+func (p *Pointer) walk(cs *typeDeque) { cs.push(&p.Target) }
 func (p *Pointer) copy() Type {
 	cpy := *p
 	return &cpy
@@ -94,7 +94,7 @@ type Array struct {
 	Nelems uint32
 }
 
-func (arr *Array) walk(cs *copyStack) { cs.push(&arr.Type) }
+func (arr *Array) walk(cs *typeDeque) { cs.push(&arr.Type) }
 func (arr *Array) copy() Type {
 	cpy := *arr
 	return &cpy
@@ -111,7 +111,7 @@ type Struct struct {
 
 func (s *Struct) size() uint32 { return s.Size }
 
-func (s *Struct) walk(cs *copyStack) {
+func (s *Struct) walk(cs *typeDeque) {
 	for i := range s.Members {
 		cs.push(&s.Members[i].Type)
 	}
@@ -139,7 +139,7 @@ type Union struct {
 
 func (u *Union) size() uint32 { return u.Size }
 
-func (u *Union) walk(cs *copyStack) {
+func (u *Union) walk(cs *typeDeque) {
 	for i := range u.Members {
 		cs.push(&u.Members[i].Type)
 	}
@@ -192,7 +192,7 @@ type EnumValue struct {
 }
 
 func (e *Enum) size() uint32    { return 4 }
-func (e *Enum) walk(*copyStack) {}
+func (e *Enum) walk(*typeDeque) {}
 func (e *Enum) copy() Type {
 	cpy := *e
 	cpy.Values = make([]EnumValue, len(e.Values))
@@ -206,7 +206,7 @@ type Fwd struct {
 	Name
 }
 
-func (f *Fwd) walk(*copyStack) {}
+func (f *Fwd) walk(*typeDeque) {}
 func (f *Fwd) copy() Type {
 	cpy := *f
 	return &cpy
@@ -219,7 +219,7 @@ type Typedef struct {
 	Type Type
 }
 
-func (td *Typedef) walk(cs *copyStack) { cs.push(&td.Type) }
+func (td *Typedef) walk(cs *typeDeque) { cs.push(&td.Type) }
 func (td *Typedef) copy() Type {
 	cpy := *td
 	return &cpy
@@ -232,7 +232,7 @@ type Volatile struct {
 }
 
 func (v *Volatile) qualify() Type      { return v.Type }
-func (v *Volatile) walk(cs *copyStack) { cs.push(&v.Type) }
+func (v *Volatile) walk(cs *typeDeque) { cs.push(&v.Type) }
 func (v *Volatile) copy() Type {
 	cpy := *v
 	return &cpy
@@ -245,7 +245,7 @@ type Const struct {
 }
 
 func (c *Const) qualify() Type      { return c.Type }
-func (c *Const) walk(cs *copyStack) { cs.push(&c.Type) }
+func (c *Const) walk(cs *typeDeque) { cs.push(&c.Type) }
 func (c *Const) copy() Type {
 	cpy := *c
 	return &cpy
@@ -258,7 +258,7 @@ type Restrict struct {
 }
 
 func (r *Restrict) qualify() Type      { return r.Type }
-func (r *Restrict) walk(cs *copyStack) { cs.push(&r.Type) }
+func (r *Restrict) walk(cs *typeDeque) { cs.push(&r.Type) }
 func (r *Restrict) copy() Type {
 	cpy := *r
 	return &cpy
@@ -271,7 +271,7 @@ type Func struct {
 	Type Type
 }
 
-func (f *Func) walk(cs *copyStack) { cs.push(&f.Type) }
+func (f *Func) walk(cs *typeDeque) { cs.push(&f.Type) }
 func (f *Func) copy() Type {
 	cpy := *f
 	return &cpy
@@ -284,7 +284,7 @@ type FuncProto struct {
 	Params []FuncParam
 }
 
-func (fp *FuncProto) walk(cs *copyStack) {
+func (fp *FuncProto) walk(cs *typeDeque) {
 	cs.push(&fp.Return)
 	for _, m := range fp.Params {
 		cs.push(&m.Type)
@@ -310,7 +310,7 @@ type Var struct {
 	Type Type
 }
 
-func (v *Var) walk(cs *copyStack) { cs.push(&v.Type) }
+func (v *Var) walk(cs *typeDeque) { cs.push(&v.Type) }
 func (v *Var) copy() Type {
 	cpy := *v
 	return &cpy
@@ -326,7 +326,7 @@ type Datasec struct {
 
 func (ds *Datasec) size() uint32 { return ds.Size }
 
-func (ds *Datasec) walk(cs *copyStack) {
+func (ds *Datasec) walk(cs *typeDeque) {
 	for i := range ds.Vars {
 		cs.push(&ds.Vars[i].Type)
 	}
@@ -427,7 +427,7 @@ func Sizeof(typ Type) (int, error) {
 func copyType(typ Type) Type {
 	var (
 		copies = make(map[Type]Type)
-		work   copyStack
+		work   typeDeque
 	)
 
 	for t := &typ; t != nil; t = work.pop() {
@@ -448,24 +448,61 @@ func copyType(typ Type) Type {
 	return typ
 }
 
-// copyStack keeps track of pointers to types which still
+// typeDeque keeps track of pointers to types which still
 // need to be visited.
-type copyStack []*Type
-
-// push adds a type to the stack.
-func (cs *copyStack) push(t *Type) {
-	*cs = append(*cs, t)
+type typeDeque struct {
+	types       []*Type
+	read, write uint64
+	mask        uint64
 }
 
-// pop returns the topmost Type, or nil.
-func (cs *copyStack) pop() *Type {
-	n := len(*cs)
-	if n == 0 {
+// push adds a type to the stack.
+func (dq *typeDeque) push(t *Type) {
+	if dq.write-dq.read < uint64(len(dq.types)) {
+		dq.types[dq.write&dq.mask] = t
+		dq.write++
+		return
+	}
+
+	new := len(dq.types) * 2
+	if new == 0 {
+		new = 8
+	}
+
+	types := make([]*Type, new)
+	pivot := dq.read & dq.mask
+	n := copy(types, dq.types[pivot:])
+	n += copy(types[n:], dq.types[:pivot])
+	types[n] = t
+
+	dq.types = types
+	dq.mask = uint64(new) - 1
+	dq.read, dq.write = 0, uint64(n+1)
+}
+
+// shift returns the first element or null.
+func (dq *typeDeque) shift() *Type {
+	if dq.read == dq.write {
 		return nil
 	}
 
-	t := (*cs)[n-1]
-	*cs = (*cs)[:n-1]
+	index := dq.read & dq.mask
+	t := dq.types[index]
+	dq.types[index] = nil
+	dq.read++
+	return t
+}
+
+// pop returns the last element or null.
+func (dq *typeDeque) pop() *Type {
+	if dq.read == dq.write {
+		return nil
+	}
+
+	dq.write--
+	index := dq.write & dq.mask
+	t := dq.types[index]
+	dq.types[index] = nil
 	return t
 }
 
