@@ -99,7 +99,7 @@ func TestType(t *testing.T) {
 				t.Error("Copy doesn't copy")
 			}
 
-			var first, second copyStack
+			var first, second walkStack
 			typ.walk(&first)
 			typ.walk(&second)
 
@@ -115,6 +115,19 @@ func TestType(t *testing.T) {
 				t.Fatal("Number of types walked is not the same")
 			}
 		})
+	}
+}
+
+func TestEqual(t *testing.T) {
+	a := newCyclicalType(5)
+
+	if !Equal(a, a) {
+		t.Error("A cyclical type isn't equal to itself")
+	}
+
+	b := newCyclicalType(9)
+	if Equal(a, b) {
+		t.Error("Two distinct types are equal")
 	}
 }
 
