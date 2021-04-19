@@ -15,6 +15,7 @@ if [[ "${1:-}" = "--in-vm" ]]; then
 
   mount -t bpf bpf /sys/fs/bpf
   mount -t tracefs tracefs /sys/kernel/debug/tracing
+
   export CGO_ENABLED=0
   export GOFLAGS=-mod=readonly
   export GOPATH=/run/go-path
@@ -26,14 +27,17 @@ if [[ "${1:-}" = "--in-vm" ]]; then
     export KERNEL_SELFTESTS="/run/input/bpf"
   fi
 
-  eval "$@"
+  "$@"
   touch "/run/output/success"
   exit 0
 fi
 
-# Pull all dependencies, so that we can run tests without the
-# vm having network access.
-go mod tidy
+if (( $# < 2 )); then
+  exec 2>&1
+  echo "Usage: $0 <kernel version> <command>"
+  echo "Please provide a kernel version and command to run"
+  exit 1
+fi
 
 # Use sudo if /dev/kvm isn't accessible by the current user.
 sudo=""
@@ -70,30 +74,20 @@ else
   echo "No selftests found, disabling"
 fi
 
-if (( $# > 0 )); then
-  printf -v cmd " %q" "$@"
-else
-  printf -v cmd " %q" go test -v -coverpkg=./... -coverprofile="/run/output/coverage.txt" -count 1 ./...
-fi
+printf -v cmd " %q" "$@"
 
-echo Testing on "${kernel_version}"
 $sudo virtme-run --kimg "${tmp_dir}/${kernel}" --memory 512M --pwd \
   --rw \
-  --rwdir=/run/input="${input}" \
+  --rwdir="$(dirname "$1")=$(dirname "$1")" \
+  --rodir=/run/input="${input}" \
   --rwdir=/run/output="${output}" \
   --rodir=/run/go-path="$(go env GOPATH)" \
   --rwdir=/run/go-cache="$(go env GOCACHE)" \
   --script-sh "PATH=\"$PATH\" $(realpath "$0") --in-vm $cmd" \
-  --qemu-opts -smp 2 # need at least two CPUs for some tests
+  --qemu-opts -smp 2 < /dev/zero # need at least two CPUs for some tests
 
 if [[ ! -e "${output}/success" ]]; then
-  echo "Test failed on ${kernel_version}"
   exit 1
-else
-  echo "Test successful on ${kernel_version}"
-  if [[ -v COVERALLS_TOKEN && -f "${output}/coverage.txt" ]]; then
-    goveralls -coverprofile="${output}/coverage.txt" -service=semaphore -repotoken "$COVERALLS_TOKEN"
-  fi
 fi
 
 $sudo rm -r "${input}"
