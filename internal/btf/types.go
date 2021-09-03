@@ -611,7 +611,7 @@ func Sizeof(typ Type) (int, error) {
 // typ may form a cycle.
 //
 // Returns any errors from transform verbatim.
-func copyType(typ Type, transform func(Type) (Type, error)) (Type, error) {
+func CopyType(typ Type, transform func(Type) (Type, error)) (Type, error) {
 	copies := make(copier)
 	return typ, copies.copy(&typ, transform)
 }

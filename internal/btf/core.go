@@ -264,7 +264,7 @@ var errImpossibleRelocation = errors.New("impossible relocation")
 // the better the target is.
 func coreCalculateFixups(local Type, targets []NamedType, relos coreRelos) ([]COREFixup, error) {
 	localID := local.ID()
-	local, err := copyType(local, skipQualifiersAndTypedefs)
+	local, err := CopyType(local, skipQualifiersAndTypedefs)
 	if err != nil {
 		return nil, err
 	}
@@ -273,7 +273,7 @@ func coreCalculateFixups(local Type, targets []NamedType, relos coreRelos) ([]CO
 	var bestFixups []COREFixup
 	for i := range targets {
 		targetID := targets[i].ID()
-		target, err := copyType(targets[i], skipQualifiersAndTypedefs)
+		target, err := CopyType(targets[i], skipQualifiersAndTypedefs)
 		if err != nil {
 			return nil, err
 		}
