@@ -1196,8 +1196,8 @@ func TestMapName(t *testing.T) {
 	}
 	defer m.Close()
 
-	info, err := bpfGetMapInfoByFD(m.fd)
-	if err != nil {
+	var info sys.MapInfo
+	if err := sys.ObjInfo(m.fd, &info); err != nil {
 		t.Fatal(err)
 	}
 

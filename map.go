@@ -1308,8 +1308,8 @@ func NewMapFromID(id MapID) (*Map, error) {
 //
 // Deprecated: use MapInfo.ID() instead.
 func (m *Map) ID() (MapID, error) {
-	info, err := bpfGetMapInfoByFD(m.fd)
-	if err != nil {
+	var info sys.MapInfo
+	if err := sys.ObjInfo(m.fd, &info); err != nil {
 		return MapID(0), err
 	}
 	return MapID(info.Id), nil

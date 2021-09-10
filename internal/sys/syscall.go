@@ -31,6 +31,7 @@ func Raw(cmd Cmd, attr unsafe.Pointer, size uintptr) (uintptr, error) {
 	}
 }
 
+// Attr is implemented by all structs that can be passed to the BPF syscall.
 type Attr interface {
 	cmd() (Cmd, unsafe.Pointer, uintptr)
 }
@@ -46,6 +47,46 @@ func BPFFd(attr Attr) (*FD, error) {
 	}
 
 	return NewFD(int(fd)), nil
+}
+
+// Info is implemented by all structs that can be passed to the ObjInfo syscall.
+//
+//    MapInfo
+//    ProgInfo
+//    LinkInfo
+//    BtfInfo
+type Info interface {
+	info() (unsafe.Pointer, uint32)
+}
+
+func (i *MapInfo) info() (unsafe.Pointer, uint32) {
+	return unsafe.Pointer(i), uint32(unsafe.Sizeof(*i))
+}
+
+func (i *ProgInfo) info() (unsafe.Pointer, uint32) {
+	return unsafe.Pointer(i), uint32(unsafe.Sizeof(*i))
+}
+
+func (i *LinkInfo) info() (unsafe.Pointer, uint32) {
+	return unsafe.Pointer(i), uint32(unsafe.Sizeof(*i))
+}
+
+func (i *BtfInfo) info() (unsafe.Pointer, uint32) {
+	return unsafe.Pointer(i), uint32(unsafe.Sizeof(*i))
+}
+
+// ObjInfo retrieves information about a BPF Fd.
+//
+// info may be one of MapInfo, ProgInfo, LinkInfo and BtfInfo.
+func ObjInfo(fd *FD, info Info) error {
+	ptr, len := info.info()
+	_, err := BPF(&ObjGetInfoByFdAttr{
+		BpfFd:   fd.Uint(),
+		InfoLen: len,
+		Info:    NewPointer(ptr),
+	})
+	runtime.KeepAlive(fd)
+	return err
 }
 
 // BPFObjName is a null-terminated string made up of

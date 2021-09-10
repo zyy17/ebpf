@@ -688,8 +688,8 @@ func ProgramGetNextID(startID ProgramID) (ProgramID, error) {
 //
 // Deprecated: use ProgramInfo.ID() instead.
 func (p *Program) ID() (ProgramID, error) {
-	info, err := bpfGetProgInfoByFD(p.fd, nil)
-	if err != nil {
+	var info sys.ProgInfo
+	if err := sys.ObjInfo(p.fd, &info); err != nil {
 		return ProgramID(0), err
 	}
 	return ProgramID(info.Id), nil

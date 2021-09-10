@@ -2,7 +2,6 @@ package link
 
 import (
 	"fmt"
-	"unsafe"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/internal"
@@ -209,12 +208,7 @@ func (l *RawLink) UpdateArgs(opts RawLinkUpdateOptions) error {
 // Info returns metadata about the link.
 func (l *RawLink) Info() (*RawLinkInfo, error) {
 	var info sys.LinkInfo
-	attr := sys.ObjGetInfoByFdAttr{
-		BpfFd:   l.fd.Uint(),
-		InfoLen: uint32(unsafe.Sizeof(info)),
-		Info:    sys.NewPointer(unsafe.Pointer(&info)),
-	}
-	if _, err := sys.BPF(&attr); err != nil {
+	if err := sys.ObjInfo(l.fd, &info); err != nil {
 		return nil, fmt.Errorf("link info: %s", err)
 	}
 

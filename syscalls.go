@@ -5,8 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"runtime"
-	"unsafe"
 
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/internal"
@@ -139,39 +137,6 @@ func wrapMapError(err error) error {
 	}
 
 	return err
-}
-
-func bpfGetProgInfoByFD(fd *sys.FD, ids []MapID) (*sys.ProgInfo, error) {
-	var info sys.ProgInfo
-	if len(ids) > 0 {
-		info.NrMapIds = uint32(len(ids))
-		info.MapIds = sys.NewPointer(unsafe.Pointer(&ids[0]))
-	}
-
-	attr := sys.ObjGetInfoByFdAttr{
-		BpfFd:   fd.Uint(),
-		InfoLen: uint32(unsafe.Sizeof(info)),
-		Info:    sys.NewPointer(unsafe.Pointer(&info)),
-	}
-
-	if _, err := sys.BPF(&attr); err != nil {
-		return nil, fmt.Errorf("can't get program info: %w", err)
-	}
-	runtime.KeepAlive(fd)
-	return &info, nil
-}
-
-func bpfGetMapInfoByFD(fd *sys.FD) (*sys.MapInfo, error) {
-	var info sys.MapInfo
-	attr := sys.ObjGetInfoByFdAttr{
-		BpfFd:   fd.Uint(),
-		InfoLen: uint32(unsafe.Sizeof(info)),
-		Info:    sys.NewPointer(unsafe.Pointer(&info)),
-	}
-	if _, err := sys.BPF(&attr); err != nil {
-		return nil, fmt.Errorf("can't get map info: %w", err)
-	}
-	return &info, nil
 }
 
 var haveObjName = internal.FeatureTest("object names", "4.15", func() error {
