@@ -257,11 +257,9 @@ func scanFdInfoReader(r io.Reader, fields map[string]interface{}) error {
 //
 // Requires at least 5.8.
 func EnableStats(which uint32) (io.Closer, error) {
-	attr := sys.EnableStatsAttr{
+	fd, err := sys.BPFFd(&sys.EnableStatsAttr{
 		Type: which,
-	}
-
-	fd, err := sys.EnableStats(&attr)
+	})
 	if err != nil {
 		return nil, err
 	}

@@ -14,7 +14,12 @@ func bpfGetBTFInfoByFD(fd *sys.FD, btf, name []byte) (*sys.BtfInfo, error) {
 		Name:    sys.NewSlicePointer(name),
 		NameLen: uint32(len(name)),
 	}
-	if err := sys.ObjGetInfoByFD(fd, unsafe.Pointer(&info), unsafe.Sizeof(info)); err != nil {
+	attr := sys.ObjGetInfoByFdAttr{
+		BpfFd:   fd.Uint(),
+		InfoLen: uint32(unsafe.Sizeof(info)),
+		Info:    sys.NewPointer(unsafe.Pointer(&info)),
+	}
+	if _, err := sys.BPF(&attr); err != nil {
 		return nil, fmt.Errorf("can't get program info: %w", err)
 	}
 

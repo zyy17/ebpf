@@ -1089,17 +1089,17 @@ func TestCgroupPerCPUStorageMarshaling(t *testing.T) {
 		AttachFlags:  0,
 		ReplaceBpfFd: 0,
 	}
-	err = sys.ProgAttach(&progAttachAttrs)
+	_, err = sys.BPF(&progAttachAttrs)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() {
-		attr := sys.ProgAttachAttr{
+		attr := sys.ProgDetachAttr{
 			TargetFd:    uint32(cgroup.Fd()),
 			AttachBpfFd: uint32(prog.FD()),
 			AttachType:  uint32(AttachCGroupInetEgress),
 		}
-		if err := sys.ProgDetach(&attr); err != nil {
+		if _, err := sys.BPF(&attr); err != nil {
 			t.Fatal(err)
 		}
 	}()
