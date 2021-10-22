@@ -20,6 +20,7 @@ const (
 	EINTR   = linux.EINTR
 	EPERM   = linux.EPERM
 	ESRCH   = linux.ESRCH
+	EFAULT  = linux.EFAULT
 	ENODEV  = linux.ENODEV
 	EBADF   = linux.EBADF
 	E2BIG   = linux.E2BIG
@@ -66,6 +67,9 @@ const (
 	PERF_RECORD_SAMPLE       = linux.PERF_RECORD_SAMPLE
 	AT_FDCWD                 = linux.AT_FDCWD
 	RENAME_NOREPLACE         = linux.RENAME_NOREPLACE
+	PROT_NONE                = linux.PROT_NONE
+	MAP_ANON                 = linux.MAP_ANON
+	MAP_PRIVATE              = linux.MAP_PRIVATE
 )
 
 // Statfs_t is a wrapper
@@ -205,4 +209,8 @@ func KernelRelease() (string, error) {
 
 func Prlimit(pid, resource int, new, old *Rlimit) error {
 	return linux.Prlimit(pid, resource, new, old)
+}
+
+func Mprotect(b []byte, prot int) error {
+	return linux.Mprotect(b, prot)
 }

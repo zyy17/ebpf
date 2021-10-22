@@ -1769,3 +1769,13 @@ func ExampleMap_Iterate_nestedMapsAndProgramArrays() {
 		panic(fmt.Sprint("Iterator encountered an error:", err))
 	}
 }
+
+func TestGuess(t *testing.T) {
+	h := createHash()
+	defer h.Close()
+
+	key, value, err := mapGuessSizes(h.fd)
+	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, key, qt.Equals, h.KeySize())
+	qt.Assert(t, value, qt.Equals, h.ValueSize())
+}

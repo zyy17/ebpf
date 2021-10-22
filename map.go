@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -1326,4 +1327,98 @@ func (m *Map) ID() (MapID, error) {
 		return MapID(0), err
 	}
 	return MapID(info.Id), nil
+}
+
+func mapGuessSizes(fd *sys.FD) (key, value uint32, _ error) {
+	page := os.Getpagesize()
+
+	// Create a mapping of two pages. Due to PROT_NONE the kernel will return
+	// EFAULT when accessing it.
+	b, err := unix.Mmap(-1, 0, page*2, unix.PROT_NONE, unix.MAP_ANON|unix.MAP_PRIVATE)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer unix.Munmap(b)
+
+	// Make the first page readable and writable. The kernel will not fault when
+	// accessing this part.
+	if err := unix.Mprotect(b[:page], unix.PROT_READ|unix.PROT_WRITE); err != nil {
+		return 0, 0, err
+	}
+
+	// We now have a mapping of two pages:
+	//
+	//    +------------+
+	//    | R/W | NONE |
+	//    +------------+
+	//
+	// By controlling the key (or value) pointer given to the syscall we can
+	// determine the length which the kernel expects. Let's assume the key size
+	// is 4:
+	//
+	//              R/W || NONE
+	// 1:           | 0 || 1 2 3 |   EFAULT
+	// 2:         | 0 1 || 2 3 |     EFAULT
+	// 3:       | 0 1 2 || 3 |       EFAULT
+	// 4:     | 0 1 2 3 ||           0 or ENOENT
+
+	guessKey := func() (uint32, error) {
+		attr := sys.MapLookupElemAttr{
+			MapFd: fd.Uint(),
+			Value: sys.NewSlicePointer(b),
+		}
+
+		for size := 1; size <= page; size++ {
+			attr.Key = sys.NewPointer(unsafe.Pointer(&b[page-size]))
+			err := sys.MapLookupElem(&attr)
+			if errors.Is(err, unix.EFAULT) {
+				continue
+			}
+			if err != nil && !errors.Is(err, unix.ENOENT) {
+				return 0, err
+			}
+			return uint32(size), nil
+		}
+
+		return 0, errors.New("failed")
+	}
+
+	keySize, err := guessKey()
+	if err != nil {
+		return 0, 0, fmt.Errorf("guess key size: %w", err)
+	}
+
+	guessValue := func() (uint32, error) {
+		attr := sys.MapUpdateElemAttr{
+			MapFd: fd.Uint(),
+			Key:   sys.NewSlicePointer(b),
+			// Prevent the update from ever succeeding.
+			Flags: 1 << 63,
+		}
+
+		for size := 1; size <= page; size++ {
+			attr.Value = sys.NewPointer(unsafe.Pointer(&b[page-size]))
+			err := sys.MapUpdateElem(&attr)
+			fmt.Println(err)
+			if err == nil {
+				return 0, errors.New("uh oh")
+			}
+			if errors.Is(err, unix.EFAULT) {
+				continue
+			}
+			if !errors.Is(err, unix.EINVAL) {
+				return 0, err
+			}
+			return uint32(size), nil
+		}
+
+		return 0, errors.New("failed")
+	}
+
+	valueSize, err := guessValue()
+	if err != nil {
+		return 0, 0, fmt.Errorf("guess value size: %w", err)
+	}
+
+	return keySize, valueSize, nil
 }
