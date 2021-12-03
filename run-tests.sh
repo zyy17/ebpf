@@ -53,11 +53,12 @@ if [[ "${1:-}" = "--exec-vm" ]]; then
     --rodir=/run/input="${input}" \
     --rwdir=/run/output="${output}" \
     --script-sh "PATH=\"$PATH\" CI_MAX_KERNEL_VERSION="${CI_MAX_KERNEL_VERSION:-}" \"$script\" --exec-test $cmd" \
-    --kopt possible_cpus=2; then # need at least two CPUs for some tests
+    --kopt possible_cpus=2 --qemu-opts -D "${output}/qemu.log" -d trace:cpu_reset,guest_errors; then # need at least two CPUs for some tests
     exit 23
   fi
 
   if [[ ! -e "${output}/success" ]]; then
+    cat "${output}/qemu.log"
     exit 42
   fi
 
