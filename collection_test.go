@@ -156,6 +156,35 @@ func TestCollectionSpecRewriteMaps(t *testing.T) {
 	}
 }
 
+func TestCollectionSpecLinkCall(t *testing.T) {
+	spec, err := LoadCollectionSpec("testdata/link_call-el.elf")
+	if err != nil {
+		t.Fatal("Can't parse ELF:", err)
+	}
+
+	// Append a definition for foo()
+	spec.Programs["link_call"].Instructions = append(spec.Programs["link_call"].Instructions,
+		asm.Mov.Imm32(asm.R0, 23).Sym("foo"),
+		asm.Return(),
+	)
+
+	// We don't have BTF for foo(), just get rid of it all
+	spec.Programs["link_call"].BTF = nil
+
+	coll, err := NewCollection(spec)
+	if err != nil {
+		t.Fatal("Can't load collection:", err)
+	}
+
+	ret, _, err := coll.Programs["link_call"].Test(make([]byte, 14))
+	if err != nil {
+		t.Fatal("Running program:", err)
+	}
+	if ret != 23 {
+		t.Fatalf("Expected 23, got %d", ret)
+	}
+}
+
 func TestCollectionSpec_LoadAndAssign_LazyLoading(t *testing.T) {
 	spec := &CollectionSpec{
 		Maps: map[string]*MapSpec{

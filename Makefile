@@ -34,6 +34,7 @@ TARGETS := \
 	testdata/iproute2_map_compat \
 	testdata/map_spin_lock \
 	testdata/subprog_reloc \
+	testdata/link_call \
 	internal/btf/testdata/relocs
 
 .PHONY: all clean container-all container-shell generate
