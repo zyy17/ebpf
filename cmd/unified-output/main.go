@@ -13,6 +13,7 @@ import (
 
 const (
 	defaultOutputStructName = "event"
+	defaultUnionTypeHint    = "union_type_hint"
 )
 
 type btfMeta struct {
@@ -20,13 +21,15 @@ type btfMeta struct {
 	outputDatatStruct *btf.Struct
 }
 
+var testdata = []byte{210, 4, 0, 0, 4, 0, 0, 0, 144, 232, 164, 53, 0, 0, 0, 0, 102, 111, 111, 46, 99, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 102, 111, 111, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 1, 0, 0, 0, 102, 111, 111, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 65, 86, 0, 0}
+
 func main() {
 	bm, err := NewBTFMeta("./testdata/event.bpf.o")
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	o, err := bm.output(generateTestData("hello", "world", 100, 200))
+	o, err := bm.output(testdata)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -86,7 +89,7 @@ func (b *btfMeta) parseStructData(input *btf.Struct, data []byte) (map[string]in
 		end := start + length
 
 		fmt.Printf("%s: %d-%d\n", member.Name, start, end)
-		d, err := b.parseRawData(data[start:end], member)
+		d, err := b.parseRawData(data[start:end], member.Name, member.Type)
 		if err != nil {
 			return nil, err
 		}
@@ -111,25 +114,34 @@ func (b *btfMeta) getUnderlayTypeFromTypedef(input btf.Type) (underlayType btf.T
 	}
 }
 
-func (b *btfMeta) parseRawData(input []byte, member btf.Member) (interface{}, error) {
-	typ := member.Type
+var unionType int32
+
+func (b *btfMeta) parseRawData(input []byte, name string, typ btf.Type) (interface{}, error) {
 	if _, ok := typ.(*btf.Typedef); ok {
 		underlayType, err := b.getUnderlayTypeFromTypedef(typ)
 		if err != nil {
 			return nil, err
 		}
-		return b.processBasicType(input, underlayType)
+		return b.parseRawData(input, name, underlayType)
 	}
 
 	if _, ok := typ.(*btf.Struct); ok {
 		return b.parseStructData(typ.(*btf.Struct), input)
 	}
 
-	return b.processBasicType(input, typ)
-}
+	if _, ok := typ.(*btf.Enum); ok {
+		enumBtfType := typ.(*btf.Enum)
+		var o int32
+		binary.Read(bytes.NewReader(input[:4]), binary.LittleEndian, &o)
+		unionType = o
+		return enumBtfType.Values[o].Name, nil
+	}
 
-func (b *btfMeta) processBasicType(input []byte, typ btf.Type) (interface{}, error) {
-	fmt.Printf("%s, data: %x\n", typ.String(), input)
+	if _, ok := typ.(*btf.Union); ok {
+		unionBtfType := typ.(*btf.Union)
+		return b.parseRawData(input, name, unionBtfType.Members[unionType].Type)
+	}
+
 	if parsed, ok := typ.(*btf.Int); ok {
 		// Process uint64
 		if !parsed.Encoding.IsSigned() && parsed.Bits == 64 {
@@ -179,33 +191,6 @@ func (b *btfMeta) processBasicType(input []byte, typ btf.Type) (interface{}, err
 	}
 
 	return nil, fmt.Errorf("unsupported btf type '%s'", typ.String())
-}
-
-func generateTestData(file, task string, deltaNs, pid uint64) []byte {
-	type foo struct {
-		a int32
-		b uint32
-	}
-	type event struct {
-		pid  uint32
-		_pad [4]byte
-
-		deltaNs  uint64
-		filename [32]byte
-		task     [16]byte
-		f        foo
-	}
-
-	e := &event{
-		filename: [32]byte{},
-		task:     [16]byte{},
-		deltaNs:  deltaNs,
-		pid:      uint32(pid),
-		f:        foo{a: 1, b: 2},
-	}
-	copy(e.filename[:], file)
-	copy(e.task[:], task)
-	return serialize(e, binary.LittleEndian)
 }
 
 func serialize(input interface{}, order binary.ByteOrder) []byte {
