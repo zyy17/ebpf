@@ -1,4 +1,4 @@
-typedef unsigned int pid_t;
+typedef unsigned int tgid_t;
 
 #define FILENAME_LEN  32
 #define TASK_COMM_LEN 16
@@ -29,14 +29,28 @@ struct access_info {
     } info;
 };
 
+struct embed_b {
+    int eb1;
+};
+
+struct embed_a {
+    int ea;
+    int eb;
+    struct embed_b eb2;
+};
+
 struct event {
-    pid_t pid;
+    tgid_t pid;
     unsigned long delta_ns;
     char filename[FILENAME_LEN];
     unsigned char task[TASK_COMM_LEN];
     struct foo f;
-    struct access_info info;
+    struct access_info info1;
+    struct access_info info2;
+    unsigned int unsigned_int_data[10];
+    short short_int_data[4];
+    struct embed_a embed_a;
 };
 
 // Force emitting struct event into the ELF.
-const struct event *e __attribute__((unused));
+const struct event *__pangolin_output_e __attribute__((unused));
